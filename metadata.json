@@ -1,0 +1,6 @@
+{
+  "name": "LinkPix",
+  "description": "Store product photos and find them by Amazon link or ASIN later.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

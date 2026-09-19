@@ -1,0 +1,108 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "An Amazon product with attached user-uploaded photos and metadata",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique product ID",
+          "maxLength": 128
+        },
+        "amazon_url": {
+          "type": "string",
+          "description": "Amazon product URL or 10-character ASIN",
+          "maxLength": 2048
+        },
+        "asin": {
+          "type": "string",
+          "description": "10-character Amazon Standard Identification Number",
+          "maxLength": 30
+        },
+        "title": {
+          "type": "string",
+          "description": "Product title or description",
+          "maxLength": 1000
+        },
+        "notes": {
+          "type": "string",
+          "description": "User notes about condition, serial number, packaging",
+          "maxLength": 5000
+        },
+        "tags": {
+          "type": "array",
+          "description": "List of tags associated with this product"
+        },
+        "photos": {
+          "type": "array",
+          "description": "Array of photo objects stored for this product"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "Creator email or identifier",
+          "maxLength": 256
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["id", "amazon_url", "photos", "createdAt", "updatedAt"]
+    },
+    "VaultSetting": {
+      "title": "VaultSetting",
+      "description": "Configuration and salted SHA-256 hash for the master vault passcode",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Setting ID (vault)",
+          "maxLength": 32
+        },
+        "hash": {
+          "type": "string",
+          "description": "SHA-256 hexadecimal hash of the passcode with salt",
+          "maxLength": 64
+        },
+        "salt": {
+          "type": "string",
+          "description": "Cryptographic salt for hashing",
+          "maxLength": 64
+        },
+        "isCustom": {
+          "type": "boolean",
+          "description": "Flag indicating if a custom passcode has been set"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp of last passcode change"
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Email or ID of user who changed passcode",
+          "maxLength": 256
+        }
+      },
+      "required": ["id", "hash", "salt", "isCustom", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Stores shared product images, Amazon links, and metadata accessible across devices with vault passcode"
+    },
+    "/settings/{settingId}": {
+      "schema": "VaultSetting",
+      "description": "Stores master passcode configuration and cryptographic salt"
+    },
+    "/users/{userId}/products/{productId}": {
+      "schema": "Product",
+      "description": "Stores user-specific product images, Amazon links, and metadata"
+    }
+  }
+}

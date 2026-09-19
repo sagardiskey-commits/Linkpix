@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Strict schema validation for shared products
+    function isValidSharedProduct(data) {
+      return data.keys().hasOnly(['id', 'amazon_url', 'asin', 'title', 'notes', 'tags', 'photos', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['id', 'amazon_url', 'photos', 'createdAt', 'updatedAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.amazon_url is string && data.amazon_url.size() > 0 && data.amazon_url.size() <= 2048
+        && data.photos is list && data.photos.size() <= 50
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64
+        && (!('title' in data) || (data.title is string && data.title.size() <= 1000))
+        && (!('asin' in data) || (data.asin is string && data.asin.size() <= 30))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 5000))
+        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 50))
+        && (!('createdBy' in data) || (data.createdBy is string && data.createdBy.size() <= 256));
+    }
+
+    // Schema validation for vault settings (salt & SHA-256 hash)
+    function isValidVaultSetting(data) {
+      return data.keys().hasOnly(['id', 'hash', 'salt', 'isCustom', 'updatedAt', 'updatedBy'])
+        && data.keys().hasAll(['id', 'hash', 'salt', 'isCustom', 'updatedAt'])
+        && data.id == 'vault'
+        && data.hash is string && data.hash.size() == 64
+        && data.salt is string && data.salt.size() >= 8 && data.salt.size() <= 64
+        && data.isCustom is bool
+        && data.updatedAt is string && data.updatedAt.size() <= 64
+        && (!('updatedBy' in data) || (data.updatedBy is string && data.updatedBy.size() <= 256));
+    }
+
+    // Strict schema validation for user-specific legacy products
+    function isValidProduct(data, userId) {
+      return data.keys().hasOnly(['id', 'userId', 'amazon_url', 'asin', 'title', 'notes', 'tags', 'photos', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['id', 'userId', 'amazon_url', 'photos', 'createdAt', 'updatedAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.userId == userId
+        && data.amazon_url is string && data.amazon_url.size() > 0 && data.amazon_url.size() <= 2048
+        && data.photos is list && data.photos.size() <= 50
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64
+        && (!('title' in data) || (data.title is string && data.title.size() <= 1000))
+        && (!('asin' in data) || (data.asin is string && data.asin.size() <= 30))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 5000))
+        && (!('tags' in data) || (data.tags is list && data.tags.size() <= 50));
+    }
+
+    // Connection testing endpoint
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Master Vault Passcode Settings
+    // Allows retrieving the public salt & hash to verify password, and updating upon passcode change
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId);
+      allow list: if false;
+      allow create, update: if isValidId(settingId)
+        && settingId == 'vault'
+        && isValidVaultSetting(incoming());
+      allow delete: if false;
+    }
+
+    // Shared LinkPix Products Collection
+    // Accessible to all users who unlocked the vault passcode
+    match /products/{productId} {
+      allow get, list: if true;
+      
+      allow create: if isValidId(productId)
+        && productId == incoming().id
+        && isValidSharedProduct(incoming());
+
+      allow update: if isValidId(productId)
+        && productId == incoming().id
+        && isValidSharedProduct(incoming())
+        && incoming().id == existing().id;
+
+      allow delete: if isValidId(productId);
+    }
+
+    // User products collection - isolated per user, strictly owned (legacy)
+    match /users/{userId}/products/{productId} {
+      allow get, list: if isOwner(userId);
+      
+      allow create: if isOwner(userId)
+        && isValidId(productId)
+        && productId == incoming().id
+        && isValidProduct(incoming(), userId);
+
+      allow update: if isOwner(userId)
+        && isValidId(productId)
+        && productId == incoming().id
+        && isValidProduct(incoming(), userId)
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId;
+
+      allow delete: if isOwner(userId) && isValidId(productId);
+    }
+  }
+}
